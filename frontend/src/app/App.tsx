@@ -101,7 +101,7 @@ export default function App() {
                 </div>
                 <div>
                   <h1 className="text-4xl font-bold text-slate-800 dark:text-white">
-                    $ALES_App
+                    $ALES_uPP
                   </h1>
                   <p className="text-lg text-slate-600 dark:text-slate-300 mt-1">
                     Professional Business Management Solution
@@ -250,7 +250,7 @@ export default function App() {
           <div className="container mx-auto px-6 text-center">
             <div className="flex items-center justify-center gap-2 mb-2">
               <p className="text-lg font-semibold">
-                $ALES_App - Premium Business Solution
+                $ALES_uPP - Premium Business Solution
               </p>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400">
