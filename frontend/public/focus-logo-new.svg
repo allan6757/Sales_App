@@ -1,0 +1,46 @@
+<svg viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9CA3AF;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#6B7280;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#4B5563;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="4" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="400" fill="#1F2937"/>
+  
+  <!-- FOCUS text with 3D effect -->
+  <g filter="url(#shadow)">
+    <!-- F -->
+    <rect x="50" y="150" width="15" height="100" fill="url(#textGrad)"/>
+    <rect x="50" y="150" width="40" height="15" fill="url(#textGrad)"/>
+    <rect x="50" y="190" width="30" height="12" fill="url(#textGrad)"/>
+    
+    <!-- O -->
+    <rect x="100" y="150" width="15" height="100" fill="url(#textGrad)"/>
+    <rect x="135" y="150" width="15" height="100" fill="url(#textGrad)"/>
+    <rect x="100" y="150" width="50" height="15" fill="url(#textGrad)"/>
+    <rect x="100" y="235" width="50" height="15" fill="url(#textGrad)"/>
+    
+    <!-- C -->
+    <rect x="180" y="150" width="15" height="100" fill="url(#textGrad)"/>
+    <rect x="180" y="150" width="40" height="15" fill="url(#textGrad)"/>
+    <rect x="180" y="235" width="40" height="15" fill="url(#textGrad)"/>
+    
+    <!-- U -->
+    <rect x="250" y="150" width="15" height="85" fill="url(#textGrad)"/>
+    <rect x="285" y="150" width="15" height="85" fill="url(#textGrad)"/>
+    <rect x="250" y="235" width="50" height="15" fill="url(#textGrad)"/>
+    
+    <!-- S -->
+    <rect x="330" y="150" width="40" height="15" fill="url(#textGrad)"/>
+    <rect x="330" y="150" width="15" height="40" fill="url(#textGrad)"/>
+    <rect x="330" y="190" width="40" height="12" fill="url(#textGrad)"/>
+    <rect x="355" y="202" width="15" height="33" fill="url(#textGrad)"/>
+    <rect x="330" y="235" width="40" height="15" fill="url(#textGrad)"/>
+  </g>
+</svg>

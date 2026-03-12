@@ -23,7 +23,8 @@ class Database:
                 unit TEXT NOT NULL,
                 price REAL NOT NULL,
                 low_stock_threshold REAL NOT NULL,
-                date_added TEXT NOT NULL
+                date_added TEXT NOT NULL,
+                image_path TEXT
             )
         ''')
         

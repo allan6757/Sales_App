@@ -6,9 +6,11 @@ import { Label } from './ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Package, Search, Edit, Trash2, Lock, Printer, Upload, Plus, X, ShoppingBag } from 'lucide-react';
+import { Package, Search, Edit, Trash2, Lock, Printer, Upload, Plus, X, ShoppingBag, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReactToPrint } from 'react-to-print';
+import { ImageUpload } from './ImageUpload';
+import { ImageViewer } from './ImageViewer';
 
 interface StockItem {
   id: string;
@@ -18,6 +20,7 @@ interface StockItem {
   price: number;
   lowStockThreshold: number;
   dateAdded: string;
+  imagePath?: string;
 }
 
 interface BulkStockItem {
@@ -26,6 +29,7 @@ interface BulkStockItem {
   unit: 'pieces' | 'dozens' | 'grosses' | 'packets';
   price: string;
   lowStockThreshold: string;
+  imagePath?: string;
 }
 
 interface StockManagementProps {
@@ -48,20 +52,66 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
   const [bulkItems, setBulkItems] = useState<BulkStockItem[]>([{ name: '', quantity: '', unit: 'pieces', price: '', lowStockThreshold: '10' }]);
+  const [showImageUpload, setShowImageUpload] = useState(false);
+  const [currentImagePath, setCurrentImagePath] = useState<string>('');
+  const [showImageViewer, setShowImageViewer] = useState(false);
+  const [viewingImage, setViewingImage] = useState<{ path: string; name: string } | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadStock();
   }, []);
 
-  const loadStock = () => {
-    const saved = localStorage.getItem('stockItems');
-    if (saved) {
-      setStockItems(JSON.parse(saved));
+  const loadStock = async () => {
+    console.log('Loading stock data...');
+    try {
+      const response = await fetch('http://localhost:5000/api/stock');
+      if (response.ok) {
+        const items = await response.json();
+        console.log('Stock data loaded from backend:', items);
+        // Convert snake_case to camelCase for frontend
+        const formattedItems = items.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: item.price,
+          lowStockThreshold: item.low_stock_threshold,
+          dateAdded: item.date_added,
+          imagePath: item.image_path
+        }));
+        setStockItems(formattedItems);
+      }
+    } catch (error) {
+      console.log('Backend not available, using localStorage fallback');
+      // Fallback to localStorage if backend is not available
+      const saved = localStorage.getItem('stockItems');
+      if (saved) {
+        const items = JSON.parse(saved);
+        console.log('Stock data loaded from localStorage:', items);
+        setStockItems(items);
+      } else {
+        console.log('No stock data found in localStorage');
+        // Set some sample data for testing
+        const sampleData: StockItem[] = [
+          {
+            id: '1',
+            name: 'Sample Item',
+            quantity: 10,
+            unit: 'pieces',
+            price: 100,
+            lowStockThreshold: 5,
+            dateAdded: new Date().toISOString()
+          }
+        ];
+        setStockItems(sampleData);
+        localStorage.setItem('stockItems', JSON.stringify(sampleData));
+      }
     }
   };
 
-  const saveStock = (items: StockItem[]) => {
+  const saveStock = async (items: StockItem[]) => {
+    // Always update local state and localStorage as backup
     localStorage.setItem('stockItems', JSON.stringify(items));
     setStockItems(items);
     onStockUpdate();
@@ -171,7 +221,7 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
     performAddOrUpdate();
   };
 
-  const performAddOrUpdate = () => {
+  const performAddOrUpdate = async () => {
     const newItem: StockItem = {
       id: editingId || Date.now().toString(),
       name: itemName,
@@ -180,18 +230,67 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
       price: parseFloat(price),
       lowStockThreshold: parseFloat(lowStockThreshold) || 10,
       dateAdded: new Date().toISOString(),
+      imagePath: currentImagePath || undefined,
     };
 
-    let updatedItems: StockItem[];
-    if (editingId) {
-      updatedItems = stockItems.map(item => item.id === editingId ? newItem : item);
-      toast.success('Item updated successfully');
-    } else {
-      updatedItems = [...stockItems, newItem];
-      toast.success('Item added successfully');
+    try {
+      let response;
+      if (editingId) {
+        // Update existing item
+        response = await fetch(`http://localhost:5000/api/stock/${editingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            name: newItem.name,
+            quantity: newItem.quantity,
+            unit: newItem.unit,
+            price: newItem.price,
+            lowStockThreshold: newItem.lowStockThreshold,
+            imagePath: newItem.imagePath
+          }),
+        });
+      } else {
+        // Add new item
+        response = await fetch('http://localhost:5000/api/stock', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            id: newItem.id,
+            name: newItem.name,
+            quantity: newItem.quantity,
+            unit: newItem.unit,
+            price: newItem.price,
+            lowStockThreshold: newItem.lowStockThreshold,
+            dateAdded: newItem.dateAdded,
+            imagePath: newItem.imagePath
+          }),
+        });
+      }
+
+      if (response.ok) {
+        // Reload stock from backend
+        await loadStock();
+        toast.success(editingId ? 'Item updated successfully' : 'Item added successfully');
+      } else {
+        throw new Error('Failed to save item');
+      }
+    } catch (error) {
+      // Fallback to localStorage
+      let updatedItems: StockItem[];
+      if (editingId) {
+        updatedItems = stockItems.map(item => item.id === editingId ? newItem : item);
+        toast.success('Item updated successfully (offline)');
+      } else {
+        updatedItems = [...stockItems, newItem];
+        toast.success('Item added successfully (offline)');
+      }
+      saveStock(updatedItems);
     }
 
-    saveStock(updatedItems);
     resetForm();
   };
 
@@ -202,6 +301,7 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
       setUnit(item.unit);
       setPrice(item.price.toString());
       setLowStockThreshold(item.lowStockThreshold.toString());
+      setCurrentImagePath(item.imagePath || '');
       setEditingId(item.id);
       return;
     }
@@ -210,6 +310,7 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
     setUnit(item.unit);
     setPrice(item.price.toString());
     setLowStockThreshold(item.lowStockThreshold.toString());
+    setCurrentImagePath(item.imagePath || '');
     setEditingId(item.id);
   };
 
@@ -220,10 +321,25 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
     performDelete(id);
   };
 
-  const performDelete = (id: string) => {
-    const updatedItems = stockItems.filter(item => item.id !== id);
-    saveStock(updatedItems);
-    toast.success('Item deleted successfully');
+  const performDelete = async (id: string) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/stock/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        // Reload stock from backend
+        await loadStock();
+        toast.success('Item deleted successfully');
+      } else {
+        throw new Error('Failed to delete item');
+      }
+    } catch (error) {
+      // Fallback to localStorage
+      const updatedItems = stockItems.filter(item => item.id !== id);
+      saveStock(updatedItems);
+      toast.success('Item deleted successfully (offline)');
+    }
   };
 
   const resetForm = () => {
@@ -232,6 +348,7 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
     setUnit('pieces');
     setPrice('');
     setLowStockThreshold('10');
+    setCurrentImagePath('');
     setEditingId(null);
   };
 
@@ -250,7 +367,7 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-h-screen">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -328,6 +445,34 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
                   onChange={(e) => setLowStockThreshold(e.target.value)}
                   placeholder="Enter threshold"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Item Image</Label>
+                <div className="flex gap-2 items-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowImageUpload(true)}
+                    className="flex items-center gap-2"
+                  >
+                    <Camera className="size-4" />
+                    {currentImagePath ? 'Change Image' : 'Add Image'}
+                  </Button>
+                  {currentImagePath && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setViewingImage({ path: currentImagePath, name: itemName || 'Item' });
+                        setShowImageViewer(true);
+                      }}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      View Image
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex gap-2">
@@ -461,6 +606,19 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
                             </div>
                           </div>
                           <div className="flex gap-2 no-print">
+                            {item.imagePath && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setViewingImage({ path: item.imagePath!, name: item.name });
+                                  setShowImageViewer(true);
+                                }}
+                                className="text-blue-600 hover:text-blue-800"
+                              >
+                                <Camera className="size-4" />
+                              </Button>
+                            )}
                             <Button
                               size="sm"
                               variant="outline"
@@ -602,6 +760,29 @@ export function StockManagement({ onStockUpdate }: StockManagementProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Upload Dialog */}
+      <ImageUpload
+        isOpen={showImageUpload}
+        onClose={() => setShowImageUpload(false)}
+        onImageSelect={(imagePath) => {
+          setCurrentImagePath(imagePath);
+          setShowImageUpload(false);
+        }}
+      />
+
+      {/* Image Viewer Dialog */}
+      {viewingImage && (
+        <ImageViewer
+          isOpen={showImageViewer}
+          onClose={() => {
+            setShowImageViewer(false);
+            setViewingImage(null);
+          }}
+          imagePath={viewingImage.path}
+          itemName={viewingImage.name}
+        />
+      )}
 
       {/* Password Dialog */}
       <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>

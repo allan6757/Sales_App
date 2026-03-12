@@ -1,12 +1,25 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from database import Database
 import json
 from datetime import datetime
+import os
+from werkzeug.utils import secure_filename
+import uuid
 
 app = Flask(__name__)
 CORS(app)
 db = Database()
+
+# Configure upload folder
+UPLOAD_FOLDER = 'uploads/images'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 # Stock Management
 @app.route('/api/stock', methods=['GET'])
@@ -24,10 +37,10 @@ def add_stock():
     conn = db.get_connection()
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO stock_items (id, name, quantity, unit, price, low_stock_threshold, date_added)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO stock_items (id, name, quantity, unit, price, low_stock_threshold, date_added, image_path)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', (data['id'], data['name'], data['quantity'], data['unit'], 
-          data['price'], data['lowStockThreshold'], data['dateAdded']))
+          data['price'], data['lowStockThreshold'], data['dateAdded'], data.get('imagePath')))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -39,10 +52,10 @@ def update_stock(item_id):
     cursor = conn.cursor()
     cursor.execute('''
         UPDATE stock_items 
-        SET name=?, quantity=?, unit=?, price=?, low_stock_threshold=?
+        SET name=?, quantity=?, unit=?, price=?, low_stock_threshold=?, image_path=?
         WHERE id=?
     ''', (data['name'], data['quantity'], data['unit'], 
-          data['price'], data['lowStockThreshold'], item_id))
+          data['price'], data['lowStockThreshold'], data.get('imagePath'), item_id))
     conn.commit()
     conn.close()
     return jsonify({'success': True})
@@ -55,6 +68,29 @@ def delete_stock(item_id):
     conn.commit()
     conn.close()
     return jsonify({'success': True})
+
+# Image Upload
+@app.route('/api/upload-image', methods=['POST'])
+def upload_image():
+    if 'image' not in request.files:
+        return jsonify({'error': 'No image file provided'}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    if file and allowed_file(file.filename):
+        # Generate unique filename
+        filename = str(uuid.uuid4()) + '.' + file.filename.rsplit('.', 1)[1].lower()
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        file.save(filepath)
+        return jsonify({'imagePath': f'/api/images/{filename}'})
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
+@app.route('/api/images/<filename>')
+def serve_image(filename):
+    return send_from_directory(UPLOAD_FOLDER, filename)
 
 # Sales
 @app.route('/api/sales', methods=['GET'])

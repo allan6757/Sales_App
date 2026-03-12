@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { ShoppingCart, Plus, Minus, Trash2, Receipt, Printer, Sparkles, ShoppingBag, CreditCard } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, Receipt, Printer, Sparkles, ShoppingBag, CreditCard, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReactToPrint } from 'react-to-print';
 
@@ -10,9 +10,11 @@ interface StockItem {
   id: string;
   name: string;
   quantity: number;
+  unit: 'pieces' | 'dozens' | 'grosses' | 'packets';
   price: number;
   lowStockThreshold: number;
   dateAdded: string;
+  imagePath?: string;
 }
 
 interface SaleItem {
@@ -46,10 +48,30 @@ export function MakeSale({ onSaleComplete }: MakeSaleProps) {
     loadStock();
   }, []);
 
-  const loadStock = () => {
-    const saved = localStorage.getItem('stockItems');
-    if (saved) {
-      setStockItems(JSON.parse(saved));
+  const loadStock = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/stock');
+      if (response.ok) {
+        const items = await response.json();
+        // Convert snake_case to camelCase for frontend
+        const formattedItems = items.map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          price: item.price,
+          lowStockThreshold: item.low_stock_threshold,
+          dateAdded: item.date_added,
+          imagePath: item.image_path
+        }));
+        setStockItems(formattedItems);
+      }
+    } catch (error) {
+      // Fallback to localStorage if backend is not available
+      const saved = localStorage.getItem('stockItems');
+      if (saved) {
+        setStockItems(JSON.parse(saved));
+      }
     }
   };
 
@@ -108,24 +130,13 @@ export function MakeSale({ onSaleComplete }: MakeSaleProps) {
     return cart.reduce((sum, item) => sum + item.total, 0);
   };
 
-  const completeSale = () => {
+  const completeSale = async () => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
     }
 
-    // Update stock
-    const updatedStock = stockItems.map(stockItem => {
-      const cartItem = cart.find(item => item.itemId === stockItem.id);
-      if (cartItem) {
-        return { ...stockItem, quantity: stockItem.quantity - cartItem.quantity };
-      }
-      return stockItem;
-    });
-    localStorage.setItem('stockItems', JSON.stringify(updatedStock));
-    setStockItems(updatedStock);
-
-    // Save sale
+    // Create sale object
     const sale: Sale = {
       id: Date.now().toString(),
       items: cart,
@@ -134,14 +145,44 @@ export function MakeSale({ onSaleComplete }: MakeSaleProps) {
       timestamp: Date.now()
     };
 
-    const sales = JSON.parse(localStorage.getItem('sales') || '[]');
-    sales.push(sale);
-    localStorage.setItem('sales', JSON.stringify(sales));
+    try {
+      // Send sale to backend
+      const response = await fetch('http://localhost:5000/api/sales', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(sale),
+      });
+
+      if (response.ok) {
+        // Reload stock from backend
+        await loadStock();
+        toast.success('Sale completed successfully!');
+      } else {
+        throw new Error('Failed to save sale');
+      }
+    } catch (error) {
+      // Fallback to localStorage
+      const updatedStock = stockItems.map(stockItem => {
+        const cartItem = cart.find(item => item.itemId === stockItem.id);
+        if (cartItem) {
+          return { ...stockItem, quantity: stockItem.quantity - cartItem.quantity };
+        }
+        return stockItem;
+      });
+      localStorage.setItem('stockItems', JSON.stringify(updatedStock));
+      setStockItems(updatedStock);
+
+      const sales = JSON.parse(localStorage.getItem('sales') || '[]');
+      sales.push(sale);
+      localStorage.setItem('sales', JSON.stringify(sales));
+      toast.success('Sale completed successfully (offline)');
+    }
 
     setLastSale(sale);
     setShowReceipt(true);
     setCart([]);
-    toast.success('Sale completed successfully!');
     onSaleComplete();
   };
 
